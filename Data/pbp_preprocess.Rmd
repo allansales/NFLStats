@@ -1,0 +1,25 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(readr)
+library(dplyr)
+```
+
+```{r}
+pbp = read_csv("pbp-2018.csv")
+pbp = pbp %>% select(-starts_with("X"))
+```
+
+# complete table with offense and defense teams
+```{r}
+games = pbp %>% select(GameId, OffenseTeam, DefenseTeam) %>% distinct() %>% na.omit()
+pbp = games %>% inner_join(pbp %>% select(-OffenseTeam))
+```
+
+```{r}
+write_csv(pbp, "pbp-2018.csv")
+```
+

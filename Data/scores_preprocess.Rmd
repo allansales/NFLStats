@@ -1,0 +1,43 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(readr)
+library(dplyr)
+```
+
+```{r}
+scores = read_csv("scores.csv")
+scores$date = scores$date %>% as.Date()
+```
+
+# sample data
+```{r}
+a = scores %>% slice(105:117)
+```
+
+# add season information
+```{r}
+get_season = function(date){
+  month = format(date, "%m") %>% as.integer()
+  year = format(date, "%Y") %>% as.integer()
+  if(month < 3){
+    return(year - 1)
+  }
+  return(year)
+}
+
+scores = scores %>% rowwise %>% mutate(season = get_season(date))
+```
+
+# add total points of game
+```{r}
+scores = scores %>% mutate(total_pts = pts_win + pts_lose)
+```
+
+```{r}
+write_csv(scores, "scores.csv")
+```
+

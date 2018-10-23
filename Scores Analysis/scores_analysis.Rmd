@@ -1,0 +1,39 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(readr)
+library(dplyr)
+```
+
+```{r}
+scores = read_csv("scores.csv")
+```
+
+# Number of games with at least X points by team in season 2018
+```{r}
+#percent_games_37 = percent_games_37 %>% mutate(n.y = replace(n.y, is.na(n.y), 0)) 
+#replace NA by number
+teams_1 = scores %>% filter(season == 2018) %>% select(team = win_team, total_pts)
+teams_2 = scores %>% filter(season == 2018) %>% select(team = lose_team, total_pts)
+
+teams_game_total_pts = bind_rows(teams_1, teams_2)
+
+n_games_team = teams_game_total_pts %>% group_by(team) %>% summarise(n_games = n())
+n_games_team_x = teams_game_total_pts %>% filter(total_pts >= 43) %>% group_by(team) %>% summarise(n_x = n())
+
+n_games_team_x = n_games_team_x %>% inner_join(n_games_team)
+```
+
+# Average score by team
+```{r}
+teams_1 = scores %>% filter(season == 2018) %>% select(team = win_team, pts = pts_win)
+teams_2 = scores %>% filter(season == 2018) %>% select(team = lose_team, pts = pts_lose)
+
+teams_game_pts = bind_rows(teams_1, teams_2)
+
+teams_average_pts = teams_game_pts %>% group_by(team) %>% summarise(mean = mean(pts), median = median(pts))
+```
+
