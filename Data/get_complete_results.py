@@ -1,36 +1,15 @@
 from bs4 import BeautifulSoup
 import requests
+from dateFormat import monthToNum, dayFormat
 
 base_url = "https://www.pro-football-reference.com"
 
-page = requests.get("https://www.pro-football-reference.com/boxscores/game-scores.htm")
+page = requests.get(base_url+"/boxscores/game-scores.htm")
 soup = BeautifulSoup(page.content, 'html.parser')
 
 scores_urls = [url.find("a").get("href") for url in soup.find_all('td', {'data-stat' : "all_games"})]
 
 def date_format(date):
-
-	def monthToNum(shortMonth):
-
-		return{
-        	'January' : "01",
-        	'February' : "02",
-        	'March' : "03",
-        	'April' : "04",
-        	'May' : "05",
-        	'June' : "06",
-        	'July' : "07",
-        	'August' : "08",
-        	'September' : "09", 
-        	'October' : "10",
-        	'November' : "11",
-        	'December' : "12"
-		}[shortMonth]
-
-	def dayFormat(day):
-		if len(day) == 1:
-			return("0"+day)
-		return(day)
 
 	month, day, year = date.replace(",","").split(" ")
 	month = monthToNum(month)

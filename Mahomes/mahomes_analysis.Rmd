@@ -8,15 +8,55 @@ knitr::opts_chunk$set(echo = TRUE)
 
 library(dplyr)
 library(readr)
+library(stringr)
+library(nflscrapR)
 ```
 
 ```{r}
-pbp = read_csv("pbp-2018.csv")
+pbp = nflscrapR::season_play_by_play(2018)
+teams = nflscrapR::nflteams
+teams_qbs = nflscrapR::season_rosters(2018, c("KC","NE","NO","GB"), positions = c("QUARTERBACK"))
 ```
 
 ```{r}
-nyg = pbp %>% filter(OffenseTeam == "NYG")
+mahomes = pbp %>% filter(posteam == "KC", Passer == "P.Mahomes" | Rusher == "P.Mahomes" | PlayType == "Sack", Accepted.Penalty == 0)
+brady = pbp %>% filter(posteam == "NE", Passer == "T.Brady" | Rusher == "T.Brady" | PlayType == "Sack", Accepted.Penalty == 0)
+brees = pbp %>% filter(posteam == "NO", Passer == "D.Brees" | Rusher == "D.Brees" | PlayType == "Sack", Accepted.Penalty == 0)
+rodgers = pbp %>% filter(posteam == "GB", Passer == "A.Rodgers" | Rusher == "A.Rodgers" | PlayType == "Sack", Accepted.Penalty == 0)
 
-chiefs = pbp %>% filter(OffenseTeam == "KC")
+qbs = bind_rows(mahomes, brady, brees, rodgers)
+```
+
+# Total Yards per QB
+```{r}
+yards.lost.sack = qbs %>% group_by(posteam) %>% filter(PlayType == "Sack") %>% summarise(yards = sum(Yards.Gained))
+qbs_gained_yards = qbs %>% filter(PassOutcome != "Incomplete", InterceptionThrown == 0, Fumble == 0, Reception == 1)
+
+total_yards = qbs_gained_yards %>% group_by(posteam) %>% summarise(totalYards = sum(Yards.Gained), airYards = sum(AirYards), yardsAfterCatch = sum(YardsAfterCatch))# %>% arrange(desc(totalYards))
+
+run_yards = qbs %>% filter(is.na(Passer), InterceptionThrown == 0, Fumble == 0)
+run_yards %>% group_by(Rusher) %>% summarise(total = sum(Yards.Gained))
+```
+
+
+# TD/INT
+```{r}
+td_int_count = function(franchise_pbp){
+  n_td = franchise_pbp %>% filter(str_detect(Description, "TOUCHDOWN")) %>% nrow()
+  n_int = franchise_pbp %>% filter(str_detect(Description, "INTERCEPT")) %>% nrow()
+  
+  return(data.frame(playResult = c("TD", "Int"), number = c(n_td, n_int)))
+}
+
+a = frachises_pass %>% group_by(OffenseTeam) %>% do(., td_int_count(.))
+
+```
+
+```{r}
+
+```
+
+```{r}
+
 ```
 
