@@ -27,35 +27,56 @@ rodgers = pbp %>% filter(posteam == "GB", Passer == "A.Rodgers" | Rusher == "A.R
 qbs = bind_rows(mahomes, brady, brees, rodgers)
 ```
 
-# Total Yards per QB
+```{r}
+qbs %>% colnames()
+```
+
+
+# Current Year
+## Total Yards per QB
 ```{r}
 yards.lost.sack = qbs %>% group_by(posteam) %>% filter(PlayType == "Sack") %>% summarise(yards = sum(Yards.Gained))
-qbs_gained_yards = qbs %>% filter(PassOutcome != "Incomplete", InterceptionThrown == 0, Fumble == 0, Reception == 1)
+qbs_gained_yards = qbs %>% filter(PassOutcome == "Complete", InterceptionThrown == 0, Fumble == 0, PassAttempt == 1, Reception == 1)
 
-total_yards = qbs_gained_yards %>% group_by(posteam) %>% summarise(totalYards = sum(Yards.Gained), airYards = sum(AirYards), yardsAfterCatch = sum(YardsAfterCatch))# %>% arrange(desc(totalYards))
+
+total_yards = qbs_gained_yards %>% group_by(posteam) %>% summarise(totalYards = sum(Yards.Gained))#, airYards = sum(AirYards), yardsAfterCatch = sum(YardsAfterCatch))# %>% arrange(desc(totalYards))
+total_yards
 
 run_yards = qbs %>% filter(is.na(Passer), InterceptionThrown == 0, Fumble == 0)
 run_yards %>% group_by(Rusher) %>% summarise(total = sum(Yards.Gained))
 ```
 
-
-# TD/INT
+## TD/INT
 ```{r}
-td_int_count = function(franchise_pbp){
-  n_td = franchise_pbp %>% filter(str_detect(Description, "TOUCHDOWN")) %>% nrow()
-  n_int = franchise_pbp %>% filter(str_detect(Description, "INTERCEPT")) %>% nrow()
+td_int_count = function(pbp){
+  n_td = qbs %>% filter(PassAttempt == 1, InterceptionThrown == 0, Touchdown == 1) %>% group_by(posteam) %>% summarise(n_TD = n())
+  
+  n_int = qbs %>% filter(PassAttempt == 1, InterceptionThrown == 1) %>% group_by(posteam) %>% summarise(n_INT = n())
   
   return(data.frame(playResult = c("TD", "Int"), number = c(n_td, n_int)))
 }
 
-a = frachises_pass %>% group_by(OffenseTeam) %>% do(., td_int_count(.))
+a = qbs %>% group_by(posteam) %>% do(., td_int_count(.))
 
 ```
 
+# First Year of carrer as starting QB
+## Total TD/INT
 ```{r}
 
 ```
 
+## Total Yards per QB
+```{r}
+
+```
+
+## Yards per attempt
+```{r}
+
+```
+
+# 
 ```{r}
 
 ```
