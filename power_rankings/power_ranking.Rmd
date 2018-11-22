@@ -7,7 +7,7 @@ output: html_document
 
 ```{r setup, include=FALSE}
 library(tidyverse)
-library(votesys)
+library(caret)
 ```
 
 # Games formattign
@@ -58,38 +58,68 @@ game_results$Type = with(game_results, if_else(Week <= 17, "Regular Season",
 
 # Power Rankings formating
 ```{r}
-power_rankings = read_csv("python_crawlers/crawlers/spiders/nfl.csv") %>% filter(week %in% 1:17)
+power_rankings = read_csv("python_crawlers/crawlers/spiders/nfl.csv")
+preseason_rankings =  power_rankings %>% filter(week == 0)
+
+power_rankings = power_rankings %>% filter(week %in% 0:17)
 power_rankings$week = power_rankings$week %>% as.integer()
 ```
 
-
-# Merge power ranking and game results
+## Add ranking a week before
 ```{r}
-teams_results = game_results %>% select(Date, Team_1 =`Home Team`, Team_2 = `Away Team`, Team_1_score =`Home Score`, Team_2_score =`Away Score`, Season, Week, Day_of_week, Type)
-teams_results_2 = game_results %>% select(Date, Team_1 = `Away Team`, Team_2 =`Home Team`, Team_1_score =`Away Score`, Team_2_score =`Home Score`, Season, Week, Day_of_week, Type)
+get_previous_rank <- function(data, week_number, team_name, season_year, data_consult){
+  if(week_number == 0){
+    previous_rank = 0
+  } else {
+    previous_rank = data_consult %>% filter(week == (week_number-1), team == team_name, year == season_year) %>% select(rank) %>% as.integer()
+  }
+  return(previous_rank)
+}
+
+previous = power_rankings %>% group_by(team, year) %>% rowwise() %>% do(Previous_Rank = get_previous_rank(., .$week, .$team, .$year, power_rankings))
+power_rankings = power_rankings %>% bind_cols(Previous_Rank = previous$Previous_Rank %>% unlist()) %>% mutate(Rank_change = rank - Previous_Rank)
+```
+
+# Teams results 
+```{r}
+teams_results = game_results %>% select(Date, Team_target =`Home Team`, Team_adversary = `Away Team`, Team_target_score =`Home Score`, Team_adversary_score =`Away Score`, Season, Week, Day_of_week, Type)
+teams_results_2 = game_results %>% select(Date, Team_target = `Away Team`, Team_adversary =`Home Team`, Team_target_score =`Away Score`, Team_adversary_score =`Home Score`, Season, Week, Day_of_week, Type)
 teams_results = rbind(teams_results, teams_results_2)
 ```
 
-# Game results in voting format
+## Game features
 ```{r}
-produce_voting_format = function(result){
-  raw = c(rep(c(result$`Home Team`,result$`Away Team`, result$Season, result$Week), result$`Home Score`),
-          rep(c(result$`Away Team`, result$`Home Team`, result$Season, result$Week), result$`Away Score`))
-  
-  raw = matrix(raw, ncol = 4, byrow = TRUE) %>% as_data_frame()
-}
-
-voting_format = game_results %>% rowwise() %>% do(produce_voting_format(.)) #%>% as.matrix()
-colnames(voting_format) = c("Home Team", "Away Team", "Season", "Week")
+games_context = teams_results %>% inner_join(power_rankings, by = c("Team_target" = "team", "Season" = "year", "Week" = "week"))
+games_context = games_context %>% inner_join(power_rankings %>% rename_at(vars(-team, -year, -week),function(x) paste0(x,"_adversary")), by = c("Team_adversary" = "team", "Season" = "year", "Week" = "week"))
 ```
 
-# Voting
+# Regression
+## Data preparing
 ```{r}
-teams = game_results$`Home Team` %>% unique()
+games_context = games_context %>% ungroup() %>% select(-Date, -Team_target, -Team_adversary, -Season, -Week, -Day_of_week, -Type, -record, -record_adversary, -rank, -rank_adversary, -Rank_change_adversary, -n_ties, -n_ties_adversary)
+```
 
-s17 = voting_format %>% filter(Season == "2017")
+## Multiple regression
+```{r}
+split = createDataPartition(y = games_context$Rank_change, p = 0.7, list = FALSE)
+dev = games_context[split,]
+val = games_context[-split,]
+ctrl = trainControl(method = "cv", number = 10)
 
-vote <- create_vote(s17 %>% as.matrix(), xtype = 2, candidate = teams)
-y <- irv_method(vote)
+lmCVFit = train(Rank_change ~ ., data = dev, method = "lm", trControl = ctrl, metric="Rsquared")
+residuals = resid(lmCVFit)
+predictedValues = predict(lmCVFit)
+predictedVal = predict(lmCVFit, val)
+modelvalues = data.frame(obs = val$Rank_change, pred=predictedVal)
+```
+
+```{r}
+plot(dev$Rank_change, residuals)
+plot(varImp(lmCVFit))
+defaultSummary(modelvalues)
+```
+
+```{r}
+
 ```
 
