@@ -1,0 +1,109 @@
+---
+title: "Power Ranking Modelling"
+output: html_notebook
+---
+
+```{r}
+library(caret)
+library(tidyverse)
+```
+
+```{r}
+games_context = read_csv("games_context.csv")
+```
+
+#Train and Test split
+```{r}
+train = games_context %>% filter(Season <= 2014)
+test = games_context %>% filter(Season > 2014)
+```
+
+```{r}
+test_clean_data = test %>% ungroup() %>% select(-Date, -Team_target, -Team_adversary, -Season, -Week, -Day_of_week, -Type, -record, -record_adversary, -rank, -rank_adversary, -Rank_change_adversary, -n_ties, -n_ties_adversary)
+
+train_clean_data = train %>% ungroup() %>% select(-Date, -Team_target, -Team_adversary, -Season, -Week, -Day_of_week, -Type, -record, -record_adversary, -rank, -rank_adversary, -Rank_change_adversary, -n_ties, -n_ties_adversary)
+```
+
+## Multiple regression
+```{r}
+ctrl = trainControl(method = "cv", number = 10)
+
+lmCVFit = train(Rank_change ~ ., data = train_clean_data, method = "lm", trControl = ctrl, metric="Rsquared")
+
+residuals = resid(lmCVFit)
+predictedValues = predict(lmCVFit)
+predictedVal = predict(lmCVFit, test_clean_data)
+modelvalues = data.frame(obs = test_clean_data$Rank_change, pred=predictedVal)
+```
+
+```{r}
+plot(train_clean_data$Rank_change, residuals)
+plot(varImp(lmCVFit))
+defaultSummary(modelvalues)
+
+saveRDS(lmCVFit, "power_ranking_variations.rds")
+```
+
+# 2015 Test using human power rankings of last week
+```{r}
+prediction = predict(lmCVFit, test)
+test_human_based = bind_cols(test, Prediction_change = prediction)
+next_rank = test_human_based %>% group_by(Season, Week) %>% mutate(model_rank = (Previous_Rank + Prediction_change) %>% rank())
+```
+
+## Correlation Test
+```{r}
+corr = next_rank %>% group_by(Season, Week) %>% summarise(Correlation = cor.test(rank, model_rank, method = "spearman", alternative = "two.sided")$estimate)
+pure_ranking = data_frame(time = next_rank$Team_target, temp = next_rank$Season, semana = next_rank$Week, rank_espn = next_rank$rank, rank_modelo = next_rank$model_rank)
+```
+
+# 2015 Test using model's power rankings of last week
+```{r}
+update_data_frame = function(full_data, replacement_data){
+  full_data = test_machine_based
+  replacement_data = new_rank
+  
+  season = replacement_data$Season %>% unique()
+  week = replacement_data$Week %>% unique()
+  
+  full_data_s_w = full_data %>% filter(Season == season, Week == week) %>% select(-rank, -Rank_change)
+  full_data_s_w = full_data_s_w %>% inner_join(replacement_data) %>% mutate(Rank_change = rank - Previous_Rank)
+  
+  full_data = full_data %>% filter(Season == season, Week != week)
+  full_data = full_data %>% bind_rows(full_data_s_w)
+  
+  if((week+1) <= max(full_data$Week)){
+    full_data_s_next_w = full_data %>% filter(Season == season, Week == (week+1)) %>% select(-Previous_Rank)
+    full_data_s_next_w = full_data_s_next_w %>% inner_join(replacement_data %>% select(Previous_Rank = rank, -Week, Season, Team_target))
+    
+    full_data = full_data %>% filter(Season == season, Week != (week+1))
+    full_data = full_data %>% bind_rows(full_data_s_next_w)    
+  }
+  return(full_data)
+}
+
+# predict change
+# previous rank + change = rank
+# rank -> previous rank
+
+test_machine_based = test
+max_season = max(test_machine_based$Season)
+min_season = min(test_machine_based$Season)
+
+max_week = max(test_machine_based$Week)
+min_week = min(test_machine_based$Week)
+
+for(s in min_season:max_season){
+  for(w in min_week:max_week){
+    w = 11
+    week_games = test_machine_based %>% filter(Season == s, Week == w)
+    prediction_s_w = predict(lmCVFit, week_games)
+    new_rank = week_games %>% select(Season, Week, Team_target) %>% bind_cols(rank = (prediction_s_w + week_games$Previous_Rank) %>% rank())
+    
+    test_machine_based = update_data_frame(test_machine_based, new_rank)
+  }
+}
+```
+
+
+

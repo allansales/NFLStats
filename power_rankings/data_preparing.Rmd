@@ -1,5 +1,5 @@
 ---
-title: "power_rankings"
+title: "Data Preparing"
 author: "Allan Sales"
 date: "21 de novembro de 2018"
 output: html_document
@@ -7,7 +7,6 @@ output: html_document
 
 ```{r setup, include=FALSE}
 library(tidyverse)
-library(caret)
 ```
 
 # Games formattign
@@ -93,33 +92,8 @@ games_context = teams_results %>% inner_join(power_rankings, by = c("Team_target
 games_context = games_context %>% inner_join(power_rankings %>% rename_at(vars(-team, -year, -week),function(x) paste0(x,"_adversary")), by = c("Team_adversary" = "team", "Season" = "year", "Week" = "week"))
 ```
 
-# Regression
-## Data preparing
+# write data
 ```{r}
-games_context = games_context %>% ungroup() %>% select(-Date, -Team_target, -Team_adversary, -Season, -Week, -Day_of_week, -Type, -record, -record_adversary, -rank, -rank_adversary, -Rank_change_adversary, -n_ties, -n_ties_adversary)
-```
-
-## Multiple regression
-```{r}
-split = createDataPartition(y = games_context$Rank_change, p = 0.7, list = FALSE)
-dev = games_context[split,]
-val = games_context[-split,]
-ctrl = trainControl(method = "cv", number = 10)
-
-lmCVFit = train(Rank_change ~ ., data = dev, method = "lm", trControl = ctrl, metric="Rsquared")
-residuals = resid(lmCVFit)
-predictedValues = predict(lmCVFit)
-predictedVal = predict(lmCVFit, val)
-modelvalues = data.frame(obs = val$Rank_change, pred=predictedVal)
-```
-
-```{r}
-plot(dev$Rank_change, residuals)
-plot(varImp(lmCVFit))
-defaultSummary(modelvalues)
-```
-
-```{r}
-
+write_csv(games_context, "games_context.csv")
 ```
 
