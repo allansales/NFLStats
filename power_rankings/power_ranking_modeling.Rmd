@@ -2,7 +2,7 @@
 title: "Power Ranking Modelling"
 output: html_notebook
 ---
-
+  
 ```{r}
 library(caret)
 library(tidyverse)
@@ -66,19 +66,29 @@ update_data_frame = function(full_data, replacement_data){
   season = replacement_data$Season %>% unique()
   week = replacement_data$Week %>% unique()
   
+  # update rank_change
   full_data_s_w = full_data %>% filter(Season == season, Week == week) %>% select(-rank, -Rank_change)
-  full_data_s_w = full_data_s_w %>% inner_join(replacement_data) %>% mutate(Rank_change = rank - Previous_Rank)
+  full_data_s_w = full_data_s_w %>% right_join(replacement_data) %>% mutate(Rank_change = rank - Previous_Rank)
   
   full_data = full_data %>% filter(Season == season, Week != week)
   full_data = full_data %>% bind_rows(full_data_s_w)
   
+  
+  # update previous_rank of next week
   if((week+1) <= max(full_data$Week)){
     full_data_s_next_w = full_data %>% filter(Season == season, Week == (week+1)) %>% select(-Previous_Rank)
-    full_data_s_next_w = full_data_s_next_w %>% inner_join(replacement_data %>% select(Previous_Rank = rank, -Week, Season, Team_target))
+    full_data_s_next_w = full_data_s_next_w %>% right_join(replacement_data %>% select(Previous_Rank = rank, -Week, Season, Team_target))
     
     full_data = full_data %>% filter(Season == season, Week != (week+1))
     full_data = full_data %>% bind_rows(full_data_s_next_w)    
   }
+  
+  # update previous_rank and rank_change after bye week
+  # team_game_rank_before_bye = full_data %>% filter(is.na(Previous_Rank), is.na(Rank_change)) %>% mutate(Week = Week - 2) %>% select(Team_target, rank) %>% arrange(Team_target)
+  # team_game_week_after_bye = full_data %>% filter(is.na(Previous_Rank), is.na(Rank_change)) %>% select(-Previous_Rank, Rank_change) %>% arrange(Team_target) %>% mutate(Previous_Rank = team_game_rank_before_bye$rank, Rank_change = rank - Previous_Rank)
+  # 
+  # full_data = full_data %>% filter(!is.na(Previous_Rank), !is.na(Rank_change))
+  # full_data = full_data %>% bind_rows(team_game_week_after_bye)
   return(full_data)
 }
 
@@ -86,23 +96,56 @@ update_data_frame = function(full_data, replacement_data){
 # previous rank + change = rank
 # rank -> previous rank
 
+get_rank <- function(test_machine_based, week_games, prediction_s_w){
+  
+  insert_at_position = function(vector, bye_teams_rank){
+    n = nrow(bye_teams_rank)
+    vector = partial_rank$Team_target
+    elements_to_insert = bye_teams_rank$Team_target
+    position_to_insert = bye_teams_rank$rank
+    
+    for(pos in 1:n){
+      vector = vector %>% append(elements_to_insert[pos],(position_to_insert[pos]-1))
+    }
+    
+    return(vector)
+  }
+  
+  all_teams = test_machine_based$Team_target %>% unique()
+  bye_teams = setdiff(all_teams, week_games$Team_target)
+  bye_teams_rank = test_machine_based %>% filter(Week == (w-1), Team_target %in% bye_teams) %>% select(Team_target, rank)
+  
+  partial_rank = week_games %>% select(Season, Week, Team_target) %>% bind_cols(partial_rank = (prediction_s_w + week_games$Previous_Rank) %>% rank()) %>% arrange(partial_rank)
+  
+  final_rank_position = insert_at_position(partial_rank$Team_target, bye_teams_rank)
+  final_rank = data_frame(Season = partial_rank$Season %>% unique(), Week = partial_rank$Week %>% unique(), Teams_target = final_rank_position, rank = 1:32)
+  
+  return(final_rank)
+}
+
+
 test_machine_based = test
 max_season = max(test_machine_based$Season)
 min_season = min(test_machine_based$Season)
 
 max_week = max(test_machine_based$Week)
 min_week = min(test_machine_based$Week)
-
 for(s in min_season:max_season){
   for(w in min_week:max_week){
-    w = 11
+    s=2015
+    w=4
     week_games = test_machine_based %>% filter(Season == s, Week == w)
     prediction_s_w = predict(lmCVFit, week_games)
-    new_rank = week_games %>% select(Season, Week, Team_target) %>% bind_cols(rank = (prediction_s_w + week_games$Previous_Rank) %>% rank())
+    new_rank = get_rank(test_machine_based, week_games, prediction_s_w)
     
     test_machine_based = update_data_frame(test_machine_based, new_rank)
   }
 }
+
+```
+
+```{r}
+
 ```
 
 
