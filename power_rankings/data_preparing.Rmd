@@ -92,8 +92,17 @@ games_context = teams_results %>% inner_join(power_rankings, by = c("Team_target
 games_context = games_context %>% inner_join(power_rankings %>% rename_at(vars(-team, -year, -week),function(x) paste0(x,"_adversary")), by = c("Team_adversary" = "team", "Season" = "year", "Week" = "week"))
 ```
 
+## Game winner
+```{r}
+games_context = games_context %>% mutate(Game_winner = if_else(Team_target_score > Team_adversary_score, Team_target, 
+                          if_else(Team_target_score < Team_adversary_score, Team_adversary, "Draw")))
+```
+
+
 # write data
 ```{r}
 write_csv(games_context, "games_context.csv")
+
+write_csv(power_rankings, "power_rankings.csv")
 ```
 

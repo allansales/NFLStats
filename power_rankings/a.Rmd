@@ -1,5 +1,5 @@
 ---
-title: "Power Ranking Modelling"
+title: "Power Ranking Modelling a"
 output: html_notebook
 ---
   
@@ -22,7 +22,7 @@ insert_at_position = function(vector, bye_teams_rank){
   return(vector)
 }
 
-get_week_rank <- function(test_machine_based, week_games, prediction_s_w, week){
+get_rank_s_w <- function(test_machine_based, week_games, prediction_s_w, week){
   
   all_teams = test_machine_based$Team_target %>% unique()
   bye_teams = setdiff(all_teams, week_games$Team_target)
@@ -40,14 +40,14 @@ get_week_rank <- function(test_machine_based, week_games, prediction_s_w, week){
   return(final_rank)
 }
 
-update_data_frame = function(full_data, replacement_data, update_next_week){
+update_data_frame = function(full_data, replacement_data, update_next_week = T){
   
   season = replacement_data$Season %>% unique()
   week = replacement_data$Week %>% unique()
   
   # update rank_change
   full_data_s_w = full_data %>% filter(Season == season, Week == week) %>% select(-rank, -Rank_change)
-  full_data_s_w = full_data_s_w %>% right_join(replacement_data) %>% mutate(Previous_Rank = if_else(is.na(Previous_Rank),rank,Previous_Rank), Rank_change = rank - Previous_Rank)
+  full_data_s_w = full_data_s_w %>% right_join(replacement_data) %>% mutate(Rank_change = rank - Previous_Rank)
   
   full_data = full_data %>% filter(Season == season, Week != week)
   full_data = full_data %>% bind_rows(full_data_s_w)
@@ -61,39 +61,30 @@ update_data_frame = function(full_data, replacement_data, update_next_week){
     full_data = full_data %>% bind_rows(full_data_s_next_w)    
   }
   
+  full_data = full_data %>% select(Season, Week, Team_target, rank, Previous_Rank, Rank_change)
   return(full_data)
 }
 
-get_full_rank = function(test, update_next_week = T){
-  test_rank = test
-  max_season = max(test_rank$Season)
-  min_season = min(test_rank$Season)
+get_full_rank = function(test, update_next_week = TRUE){
+  test_temp = test
+  max_season = max(test_temp$Season)
+  min_season = min(test_temp$Season)
   
-  max_week = max(test_rank$Week)
-  min_week = min(test_rank$Week)
-
+  max_week = max(test_temp$Week)
+  min_week = min(test_temp$Week)
+  
+  
   for(s in min_season:max_season){
     for(w in min_week:max_week){
-      week_games = test_rank %>% filter(Season == s, Week == w)
+      week_games = test_temp %>% filter(Season == s, Week == w)
       prediction_s_w = predict(lmCVFit, week_games)
-      new_rank = get_week_rank(test_rank, week_games, prediction_s_w, w)
-      test_rank = update_data_frame(test_rank, new_rank, update_next_week = T)
-
+      new_rank = get_rank_s_w(test_temp, week_games, prediction_s_w, w)
+      test_temp = update_data_frame(test_temp, new_rank, update_next_week = F)
     }
   }
-  test_rank = test_rank %>% select(Season, Week, Team_target, rank, Previous_Rank, Rank_change)  
-}
-
-get_winner_based_on_power_rank = function(power_ranking, home_team, adversary, season, week){
-  pw = power_ranking %>% filter(Week == week, Season == season)
-  home_rank = pw %>% filter(Team_target == home_team) %>% select(Previous_Rank) %>% as.integer()
-  adversary_rank = pw %>% filter(Team_target == adversary) %>% select(Previous_Rank) %>% as.integer()
   
-  if(home_rank > adversary_rank){
-    return(home_team) 
-  }
-  
-  return(adversary)
+  #test_temp = test_temp %>% select(Season, Week, Team_target, rank, Previous_Rank, Rank_change)
+  return(test_temp)
 }
 ```
 
@@ -104,8 +95,8 @@ games_context = read_csv("games_context.csv")
 
 ## Power Ranking load 
 ```{r}
-power_rankings = read_csv("power_rankings.csv")
-power_rankings = power_rankings %>% select(Team_target = team, Season = year, Week = week, human_rank = rank, Previous_Rank, Rank_change) %>% filter(Season == 2015, Week %in% 1:17)
+power_rankings = read_csv("python_crawlers/crawlers/spiders/nfl.csv")
+power_rankings = power_rankings %>% select(Team_target = team, Season = year, Week = week, human_rank = rank) %>% filter(Season == 2015, Week %in% 1:17)
 power_rankings$Week = power_rankings$Week %>% as.integer()
 ```
 
@@ -116,9 +107,9 @@ test = games_context %>% filter(Season > 2014)
 ```
 
 ```{r}
-test_clean_data = test %>% ungroup() %>% select(-Date, -Team_target, -Team_adversary, -Season, -Week, -Day_of_week, -Type, -record, -record_adversary, -rank, -rank_adversary, -Rank_change_adversary, -n_ties, -n_ties_adversary, -Game_winner)
+test_clean_data = test %>% ungroup() %>% select(-Date, -Team_target, -Team_adversary, -Season, -Week, -Day_of_week, -Type, -record, -record_adversary, -rank, -rank_adversary, -Rank_change_adversary, -n_ties, -n_ties_adversary)
 
-train_clean_data = train %>% ungroup() %>% select(-Date, -Team_target, -Team_adversary, -Season, -Week, -Day_of_week, -Type, -record, -record_adversary, -rank, -rank_adversary, -Rank_change_adversary, -n_ties, -n_ties_adversary, -Game_winner)
+train_clean_data = train %>% ungroup() %>% select(-Date, -Team_target, -Team_adversary, -Season, -Week, -Day_of_week, -Type, -record, -record_adversary, -rank, -rank_adversary, -Rank_change_adversary, -n_ties, -n_ties_adversary)
 ```
 
 ## Multiple regression
@@ -142,9 +133,19 @@ saveRDS(lmCVFit, "power_ranking_variations.rds")
 ```
 
 # 2015 Test using human power rankings of last week
+## Add bye week
+```{r}
+team_bye = test %>%
+  select(Team_target, Season, Week) %>%
+  group_by(Team_target, Season) %>%
+  summarise(bye = setdiff(1:17, Week), last_game = bye - 1)
+
+rank_bye = test %>% select(rank, Team_target, Season, Week) %>% inner_join(team_bye, by = c("Team_target" = "Team_target", "Season" = "Season", "Week" = "last_game"))
+```
+
 ## 2015 Test using humans' power rankings of last week
 ```{r}
-test_human_based = get_full_rank(test, update_next_week = F)
+human_based_model = get_full_rank(test, F)
 ```
 
 ## Correlation test between power ranking and model's prediction based on human's rank
@@ -156,7 +157,7 @@ corr_1 = ranks %>% group_by(Season, Week) %>% summarise(Correlation = cor.test(h
 
 # 2015 Test using model's power rankings of last week
 ```{r}
-test_machine_based = get_full_rank(test)
+machine_based_model = get_full_rank(test)
 ```
 
 ## Correlation test between power ranking and model's prediction
@@ -167,25 +168,16 @@ corr_2 = ranks %>% group_by(Season, Week) %>% summarise(Correlation = cor.test(h
 ```
 
 # Correct games per week
-## expect winners for model and humans power rankings
 ```{r}
-expected_winner_model = test %>% rowwise() %>% do(expected_winner = get_winner_based_on_power_rank(test_machine_based, .$Team_target, .$Team_adversary, .$Season, .$Week ))
-expected_winner_human = test %>% rowwise() %>% do(expected_winner = get_winner_based_on_power_rank(power_rankings, .$Team_target, .$Team_adversary, .$Season, .$Week ))
+test_machine_based = test_machine_based %>% mutate(Game_winner = if_else(Team_target_score > Team_adversary_score, Team_target, 
+                                                                         if_else(Team_target_score < Team_adversary_score, Team_adversary, "Draw")))
 
-test = test %>% mutate(model_expected_winner = expected_winner_model$expected_winner %>% unlist(), human_expected_winner = expected_winner_human$expected_winner %>% unlist())
+
+test_machine_based = test_machine_based %>% mutate(expect = if_else(Previous_Rank > Previous_Rank_adversary, Team_target, 
+                                                                    if_else(Previous_Rank < Previous_Rank_adversary, Team_adversary, "Draw")))
 ```
 
-## Human's winners
+## Model's winners
 ```{r}
-models_correct = test %>% filter(Game_winner == model_expected_winner) %>% group_by(Season, Week) %>% summarise(model_correct = n()/2)
-humans_correct = test %>% filter(Game_winner == human_expected_winner) %>% group_by(Season, Week) %>% summarise(human_correct = n()/2)
-games_per_week = test %>% group_by(Season, Week) %>% summarise(n_games = n()/2)
-
-n_games_correct = models_correct %>% inner_join(humans_correct) %>% inner_join(games_per_week)
-```
-
-
-```{r}
-n_games_correct %>% ggplot() + geom_line(aes(Week, n_games, color = "Total games")) + geom_line(aes(Week, human_correct, color = "Human correct")) + geom_line(aes(Week, model_correct, color = "Model correct"))
 ```
 
