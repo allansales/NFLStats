@@ -95,6 +95,24 @@ get_winner_based_on_power_rank = function(power_ranking, home_team, adversary, s
   
   return(adversary)
 }
+
+get_number_of_correct_games = function(diff, test){
+  test = test %>% filter(Rank_difference_before_game == diff) 
+  models_correct = test %>% filter(Game_winner == model_expected_winner) %>% group_by(Season, Week) %>% summarise(model_correct = n()/2)
+  humans_correct = test %>% filter(Game_winner == human_expected_winner) %>% group_by(Season, Week) %>% summarise(human_correct = n()/2)
+  games_per_week = test %>% group_by(Season, Week) %>% summarise(n_games = n()/2)
+
+  n_games_correct = games_per_week %>% 
+    left_join(humans_correct) %>% left_join(models_correct) %>% 
+    mutate_all(funs_(~replace(., is.na(.),0)))
+  
+  n_games_correct = n_games_correct %>% 
+    mutate(model_correct_percent = model_correct/n_games, 
+           human_correct_percent = human_correct/n_games, 
+           Rank_diff = diff)
+  
+  return(n_games_correct)
+}
 ```
 
 # Data load
@@ -116,9 +134,9 @@ test = games_context %>% filter(Season > 2014)
 ```
 
 ```{r}
-test_clean_data = test %>% ungroup() %>% select(-Date, -Team_target, -Team_adversary, -Season, -Week, -Day_of_week, -Type, -record, -record_adversary, -rank, -rank_adversary, -Rank_change_adversary, -n_ties, -n_ties_adversary, -Game_winner)
+test_clean_data = test %>% ungroup() %>% select(-Date, -Team_target, -Team_adversary, -Season, -Week, -Day_of_week, -Type, -record, -record_adversary, -rank, -rank_adversary, -Rank_change_adversary, -n_ties, -n_ties_adversary, -Game_winner, -Rank_difference_before_game)
 
-train_clean_data = train %>% ungroup() %>% select(-Date, -Team_target, -Team_adversary, -Season, -Week, -Day_of_week, -Type, -record, -record_adversary, -rank, -rank_adversary, -Rank_change_adversary, -n_ties, -n_ties_adversary, -Game_winner)
+train_clean_data = train %>% ungroup() %>% select(-Date, -Team_target, -Team_adversary, -Season, -Week, -Day_of_week, -Type, -record, -record_adversary, -rank, -rank_adversary, -Rank_change_adversary, -n_ties, -n_ties_adversary, -Game_winner, -Rank_difference_before_game)
 ```
 
 ## Multiple regression
@@ -175,17 +193,45 @@ expected_winner_human = test %>% rowwise() %>% do(expected_winner = get_winner_b
 test = test %>% mutate(model_expected_winner = expected_winner_model$expected_winner %>% unlist(), human_expected_winner = expected_winner_human$expected_winner %>% unlist())
 ```
 
-## Human's winners
+## Correct games x week & rank dif
 ```{r}
-models_correct = test %>% filter(Game_winner == model_expected_winner) %>% group_by(Season, Week) %>% summarise(model_correct = n()/2)
-humans_correct = test %>% filter(Game_winner == human_expected_winner) %>% group_by(Season, Week) %>% summarise(human_correct = n()/2)
-games_per_week = test %>% group_by(Season, Week) %>% summarise(n_games = n()/2)
+min_diff = test$Rank_difference_before_game %>% min()
+max_diff = test$Rank_difference_before_game %>% max()
 
-n_games_correct = models_correct %>% inner_join(humans_correct) %>% inner_join(games_per_week)
+correct_games_per_week_rankDif = min_diff:max_diff %>% lapply(get_number_of_correct_games, test)
+correct_games_per_week_rankDif = bind_rows(correct_games_per_week_rankDif)
+```
+
+# correct games x rank dif
+```{r}
+a = correct_games_per_week_rankDif %>% ungroup() %>% select(n_games, human_correct, model_correct, Rank_diff) %>% group_by(Rank_diff) %>% summarise_all(sum)
+
+library(reshape)
+library(data.table)
+
+a$model_correct = -1*a$model_correct
+mdata <- melt(a %>% as.data.table(), id=c("Rank_diff","n_games"))
+
+mdata2 = mdata
+mdata2$n_games = -1*mdata2$n_games
+mdata = mdata %>% bind_rows(mdata2)
+```
+
+```{r}
+n_games_complement %>%
+  ggplot(aes(x = Rank_diff
+             , y = value
+             , fill = variable)) +
+  geom_col()
 ```
 
 
 ```{r}
-n_games_correct %>% ggplot() + geom_line(aes(Week, n_games, color = "Total games")) + geom_line(aes(Week, human_correct, color = "Human correct")) + geom_line(aes(Week, model_correct, color = "Model correct"))
+n_games_correct %>% ggplot() + geom_line(aes(Week, n_games, color = "Total games")) + geom_point(aes(Week, n_games, color = "Total games")) + geom_line(aes(Week, human_correct, color = "Human correct")) + geom_point(aes(Week, human_correct, color = "Human correct")) + geom_line(aes(Week, model_correct, color = "Model correct")) + geom_point(aes(Week, model_correct, color = "Model correct"))
+```
+
+# Correct guesses per distance
+```{r}
+
 ```
 

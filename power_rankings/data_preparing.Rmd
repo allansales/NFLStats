@@ -98,6 +98,10 @@ games_context = games_context %>% mutate(Game_winner = if_else(Team_target_score
                           if_else(Team_target_score < Team_adversary_score, Team_adversary, "Draw")))
 ```
 
+## Rank difference between teams before game
+```{r}
+games_context = games_context %>% mutate(Rank_difference_before_game = abs(Previous_Rank - Previous_Rank_adversary))
+```
 
 # write data
 ```{r}
