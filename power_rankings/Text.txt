@@ -1,0 +1,59 @@
+Automatic NFL Power Rankings Prediction
+
+Contexto
+	- O que são NFL Power Rankings
+	- Pra que são usados
+	- Quem os cria
+	- Exemplo de Power Rankings
+
+Problema
+	- Humanos podem ser tomados por fatores além da análise para raquear os times
+
+Objetivo
+	- Automatizar a criação dos power rankings usando os e resulados dos jogos da rodada da NFL
+
+Abordagem
+	- Passar um power ranking como entrada e resultados dos jogos e ter como saida um ranking inteiro
+		- Isso pode ser dificil de treinar e a quantidade de dados poderia se tornar um problema já que cada instância da nossa base de dados seria uma semana de jogos.
+	- Modelar a variação dos times de uma semana para a outra
+		- Modelando a variação de posição dos times de uma semana para a seguinte, dado um ranking anterior, nós sabemos onde os times se encontrarão no próximo ranking
+		- Depois de decidir modelar a variação, o problema deixa de ser uma classificação para ser uma regressão
+
+
+Dados
+	- Resultados dos jogos de 2006 a 2015
+		- Link para os dados
+		- Descrição dos dados
+
+	- ESPN power rankings de 2006 a 2015
+		- Link para os dados
+		- Descrição dos dados
+
+	- Limpeza de dados
+		- Apresenta código
+
+	- Informações adicionais 
+		- Apresenta código
+
+Regressão
+	- Treino e Teste
+		- Dados de 2006 a 2014 para treino
+		- Dados de 2015 para teste
+	- Código da regressão
+	- Mostra features mais importantes para calcular a variação dos times
+
+Power Rank modeling
+	- Exemplo de saída da regressão nas primeiras semanas
+		- Ranqueamento dos times após o cálculo da variação
+	- Para as semanas com times em bye
+		- Decisão de não mudar a posição do time em bye week
+		- Ranqueamento dos times após o cálculo da variação
+
+Validação
+	- Correlação semana após semana com os rankings da ESPN
+
+Conclusão
+	- Idealmente, nós poderíamos generalizar a nossa regressão usando dados de power rankings de outros portais, como os da NFL, ESPN, CBS e FOX, dentre outras, para montar a nossa base de dados
+	- Apesar de ser possível automatizar a criação dos power rankings é sempre legal ver os comentários dos redatores das emissoras.
+
+Disponibiliza código e dados no github para reprodução.
